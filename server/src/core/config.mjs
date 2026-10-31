@@ -484,6 +484,9 @@ export const config = {
     ? resolve(root, process.env.QWEN_AUDIO_AGENT_FRONTEND_PROMPT_DIR)
     : resolve(root, 'config/frontend-agent'),
   assistantProfilePath: frontendProfileConfiguration.assistantProfilePath,
+  responseStylePath: process.env.QWEN_AUDIO_AGENT_RESPONSE_STYLE_PATH
+    ? resolve(root, process.env.QWEN_AUDIO_AGENT_RESPONSE_STYLE_PATH)
+    : resolve(runtimeEnvironment.configDirectory, 'RESPONSE_STYLE.md'),
   frontendMemoryPath: process.env.QWEN_AUDIO_AGENT_MEMORY_PATH
     ? resolve(root, process.env.QWEN_AUDIO_AGENT_MEMORY_PATH)
     : process.env.QWEN_AUDIO_AGENT_FRONTEND_MEMORY_PATH

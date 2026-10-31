@@ -22,11 +22,24 @@ QWEN_AUDIO_AGENT_ASSISTANT_PROFILE_PATH=/absolute/path/to/ASSISTANT.md
 
 画像不控制声音；音色在[语音前台设置](../configuration/frontend.zh.md)中配置。画像也不能改变工具权限、任务路由或核心运行规则。
 
+## 播报风格
+
+后台结果、阶段性进展、权限请求和提醒都使用内置的单次回复指令播报。部分语音前台（如 speech-to-speech）会用这些指令替换会话提示词，因此助手画像和用户偏好不会作用于这些播报。如需统一风格，可创建 `<config-dir>/RESPONSE_STYLE.md`，其内容（最多 2000 字符）会追加到每条此类指令之后，修改后从下一次回复起生效。
+
+也可以指定另一份文件：
+
+```dotenv
+QWEN_AUDIO_AGENT_RESPONSE_STYLE_PATH=/absolute/path/to/RESPONSE_STYLE.md
+```
+
+该文件可选；不存在时按内置指令播报。
+
 ## 数据分别放在哪里
 
 | 内容 | 默认文件 | 示例 |
 | --- | --- | --- |
 | 助手默认画像 | `<config-dir>/ASSISTANT.md` | 默认名称与表达风格 |
+| 播报风格（可选） | `<config-dir>/RESPONSE_STYLE.md` | “尽量用最少的字” |
 | 用户明确的长期偏好 | `<data-dir>/USER.md` | “以后叫我船长” |
 | 长期事实与决定 | `<data-dir>/MEMORY.md` | “我住在杭州” |
 

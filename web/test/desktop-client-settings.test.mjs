@@ -14,7 +14,12 @@ test('desktop client settings initialize from the desktop URL', () => {
     autoHideSeconds: 300,
     wakeWordEnabled: true,
     language: 'en',
+    audioInput: '',
   })
+  assert.equal(
+    initialDesktopClientSettings('?audioInput=USB+Mic').audioInput,
+    'USB Mic',
+  )
 })
 
 test('desktop client settings hot-apply without replacing unrelated state', () => {
@@ -23,6 +28,7 @@ test('desktop client settings hot-apply without replacing unrelated state', () =
     autoHideSeconds: 60,
     wakeWordEnabled: false,
     language: 'zh-CN',
+    audioInput: 'USB Mic',
   }
 
   assert.deepEqual(applyDesktopClientSettings(current, {
@@ -34,5 +40,8 @@ test('desktop client settings hot-apply without replacing unrelated state', () =
     autoHideSeconds: 120,
     wakeWordEnabled: false,
     language: 'en',
+    audioInput: 'USB Mic',
   })
+  assert.equal(applyDesktopClientSettings(current, { audioInput: '' }).audioInput, '')
+  assert.equal(applyDesktopClientSettings(current, { audioInput: 3 }).audioInput, 'USB Mic')
 })

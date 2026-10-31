@@ -1,8 +1,10 @@
 import { Worker } from 'node:worker_threads'
+import { normalizeWakeWord } from './wake-words.mjs'
 
 export class DesktopWakeWordRuntime {
-  constructor({ modelRoot, onDetected, onError, WorkerClass = Worker }) {
+  constructor({ modelRoot, wakeWord, onDetected, onError, WorkerClass = Worker }) {
     this.modelRoot = modelRoot
+    this.wakeWord = normalizeWakeWord(wakeWord)
     this.onDetected = onDetected
     this.onError = onError
     this.WorkerClass = WorkerClass
@@ -17,6 +19,14 @@ export class DesktopWakeWordRuntime {
     else this.stop()
   }
 
+  setWakeWord(id) {
+    const wakeWord = normalizeWakeWord(id)
+    if (wakeWord === this.wakeWord) return
+    this.wakeWord = wakeWord
+    this.stop()
+    if (this.enabled) this.#start()
+  }
+
   accept(audio, sampleRate = 16_000) {
     if (!this.enabled || !this.ready || !this.worker || !audio) return false
     this.worker.postMessage({ type: 'audio', audio, sampleRate })
@@ -27,7 +37,7 @@ export class DesktopWakeWordRuntime {
     if (this.worker) return
     const worker = new this.WorkerClass(
       new URL('./worker.mjs', import.meta.url),
-      { workerData: { modelRoot: this.modelRoot } },
+      { workerData: { modelRoot: this.modelRoot, wakeWord: this.wakeWord } },
     )
     this.worker = worker
     worker.on('message', message => {

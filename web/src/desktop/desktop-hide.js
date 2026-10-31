@@ -36,6 +36,10 @@ export function desktopWakeWordEnabled(search = '') {
   return new URLSearchParams(search).get('wakeWordEnabled') === 'true'
 }
 
+export function desktopAudioInput(search = '') {
+  return new URLSearchParams(search).get('audioInput') || ''
+}
+
 export function desktopTasksActive(tasks = []) {
   return tasks.some(task => (
     ACTIVE_TASK_PHASES.has(task.phase)

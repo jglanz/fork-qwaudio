@@ -9,6 +9,7 @@ import {
   Notification,
   safeStorage,
   screen,
+  session,
   shell,
   Tray,
 } from 'electron'
@@ -210,6 +211,7 @@ const desktopPresence = new DesktopPresence({
 
 const desktopWakeWord = new DesktopWakeWordRuntime({
   modelRoot: clientPaths.wakeWordModelDirectory,
+  wakeWord: initialSettings.wakeWord,
   onDetected: () => desktopPresence.wake('wake-word'),
   onError: error => logger.warn('wake_word.failed', { error }),
 })
@@ -437,34 +439,14 @@ function isDesktopRendererUrl(value) {
   )
 }
 
-function configurePermissions(window) {
-  const electronSession = window.webContents.session
-  electronSession.setPermissionCheckHandler((
-    _webContents,
-    permission,
-    requestingOrigin,
-    details,
-  ) => {
-    const origin = details?.securityOrigin || requestingOrigin
-    return permission === 'media' && isDesktopRendererUrl(origin)
-  })
-  electronSession.setPermissionRequestHandler((
-    webContents,
-    permission,
-    callback,
-    details,
-  ) => {
-    const source = details?.requestingUrl
-      || details?.securityOrigin
-      || webContents.getURL()
-    const mediaTypes = details?.mediaTypes || []
-    const audioOnly = !mediaTypes.length
-      || mediaTypes.every(type => type === 'audio')
-    callback(
-      permission === 'media'
-      && audioOnly
-      && isDesktopRendererUrl(source),
-    )
+// Every window shares the default session and loads only the app's own pages
+// (navigation away is blocked), so all permission checks and requests are
+// granted. Installed once at startup so the Settings window, which lists audio
+// input devices, has media access even before the orb window exists.
+function configurePermissions(electronSession) {
+  electronSession.setPermissionCheckHandler(() => true)
+  electronSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(true)
   })
 }
 
@@ -490,6 +472,7 @@ async function loadQwenAudioAgent(window) {
       autoHideSeconds: settings.autoHideSeconds,
       wakeWordEnabled: settings.wakeWordEnabled,
       language: effectiveDesktopLanguage(settings.language, app.getLocale()),
+      audioInput: settings.audioInput,
       surfaceMode: desktopSurfaceMode,
       sessionId: desktopConversationSessionId,
     }))
@@ -507,6 +490,7 @@ function sendDesktopClientSettings(window, settings) {
     autoHideSeconds: settings.autoHideSeconds,
     wakeWordEnabled: settings.wakeWordEnabled,
     language: effectiveDesktopLanguage(settings.language, app.getLocale()),
+    audioInput: settings.audioInput,
   })
 }
 
@@ -601,7 +585,6 @@ function createWindow() {
 
   // 悬浮层级与全屏空间可见性统一走 orb-shell 契约（与嵌入宿主同一配方）。
   configureOrbWindow(window)
-  configurePermissions(window)
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (isSafeExternalUrl(url)) void shell.openExternal(url)
@@ -1072,6 +1055,7 @@ async function applyDesktopSettings(settings) {
   const wakeShortcutChanged = previous.wakeShortcut !== normalized.wakeShortcut
   const wakeWordChanged = (
     previous.wakeWordEnabled !== normalized.wakeWordEnabled
+    || previous.wakeWord !== normalized.wakeWord
   )
   const languageChanged = previous.language !== normalized.language
   const gatewayRuntimeChanged = (
@@ -1116,6 +1100,7 @@ async function applyDesktopSettings(settings) {
   }
   desktopLanguage = normalized.language
   desktopWakeWordEnabled = normalized.wakeWordEnabled
+  desktopWakeWord.setWakeWord(normalized.wakeWord)
   desktopWakeWord.setEnabled(desktopWakeWordEnabled)
   createTray()
   if (settingsWindow && !settingsWindow.isDestroyed()) {
@@ -1293,6 +1278,7 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.whenReady().then(async () => {
+    configurePermissions(session.defaultSession)
     if (process.platform === 'darwin' && process.defaultApp) {
       app.setActivationPolicy('accessory')
       app.dock?.hide()

@@ -239,6 +239,7 @@ if (isMain) {
   const publishedDesktopModules = new Set([
     'desktop/src/settings-store.mjs',
     'desktop/src/settings-config.mjs',
+    'desktop/src/wake-word/wake-words.mjs',
     'desktop/src/i18n.mjs',
     'desktop/src/skin-store.mjs',
     'desktop/src/orb-shell.mjs',

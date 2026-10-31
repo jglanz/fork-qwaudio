@@ -1,7 +1,13 @@
 import { createRequire } from 'node:module'
-import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ensureWakeWordModel, WAKE_WORD_MODEL_FILES } from './model-manager.mjs'
+import {
+  DEFAULT_KEYWORD_BOOST,
+  DEFAULT_KEYWORD_THRESHOLD,
+  normalizeWakeWord,
+  wakeWordById,
+  wakeWordKeywordLine,
+} from './wake-words.mjs'
 
 const require = createRequire(import.meta.url)
 const engines = new Map()
@@ -16,14 +22,12 @@ function pcm16Base64ToFloat32(audio) {
   return samples
 }
 
-async function createEngine({ modelRoot }) {
-  const modelDirectory = await ensureWakeWordModel(modelRoot)
+// The single definition of the keyword spotter settings. wake-word-tool
+// evaluates candidate keywords with this same function, so its results match
+// what the desktop detector runs.
+export function createKeywordSpotter(modelDirectory, keywords) {
   const { createKws } = require('sherpa-onnx')
-  const keywords = readFileSync(
-    resolve(modelDirectory, WAKE_WORD_MODEL_FILES.keywords),
-    'utf8',
-  )
-  const keywordSpotter = createKws({
+  return createKws({
     featConfig: { samplingRate: 16000, featureDim: 80 },
     modelConfig: {
       transducer: {
@@ -39,22 +43,28 @@ async function createEngine({ modelRoot }) {
     },
     maxActivePaths: 4,
     numTrailingBlanks: 1,
-    keywordsScore: 1.0,
-    keywordsThreshold: 0.25,
-    // WASM cannot pass a host path through the native keywords_file field.
-    // Supplying the verified local file as a buffer keeps keyword loading
-    // independent of the WASM virtual filesystem.
+    keywordsScore: DEFAULT_KEYWORD_BOOST,
+    keywordsThreshold: DEFAULT_KEYWORD_THRESHOLD,
+    // WASM cannot pass a host path through the native keywords_file field, so
+    // the keywords are supplied as a buffer, independent of the WASM virtual
+    // filesystem.
     keywords: '',
     keywordsBuf: keywords,
     keywordsBufSize: Buffer.byteLength(keywords),
   })
-  return keywordSpotter
 }
 
-async function engineFor(options) {
-  const key = resolve(options.modelRoot)
+async function createEngine({ modelRoot, wakeWord }) {
+  const modelDirectory = await ensureWakeWordModel(modelRoot)
+  const keywords = `${wakeWordKeywordLine(wakeWordById(wakeWord))}\n`
+  return createKeywordSpotter(modelDirectory, keywords)
+}
+
+async function engineFor({ modelRoot, wakeWord }) {
+  const id = normalizeWakeWord(wakeWord)
+  const key = `${resolve(modelRoot)}\0${id}`
   if (!engines.has(key)) {
-    engines.set(key, createEngine(options).catch(error => {
+    engines.set(key, createEngine({ modelRoot, wakeWord: id }).catch(error => {
       engines.delete(key)
       throw error
     }))
@@ -62,19 +72,25 @@ async function engineFor(options) {
   return engines.get(key)
 }
 
-export async function createSherpaWakeWordDetector({ modelRoot }) {
-  const keywordSpotter = await engineFor({ modelRoot })
+export async function createSherpaWakeWordDetector({ modelRoot, wakeWord }) {
+  const keywordSpotter = await engineFor({ modelRoot, wakeWord })
   const stream = keywordSpotter.createStream()
   return {
     accept(audio, sampleRate = 16000) {
       const samples = pcm16Base64ToFloat32(audio)
       if (!samples.length) return false
       stream.acceptWaveform(sampleRate, samples)
-      while (keywordSpotter.isReady(stream)) keywordSpotter.decode(stream)
-      const result = keywordSpotter.getResult(stream)
-      if (!result.keyword) return false
-      keywordSpotter.reset(stream)
-      return true
+      // The spotter reports a keyword only at the decode step where it fires,
+      // so check after every step; a chunk can span several steps.
+      let detected = false
+      while (keywordSpotter.isReady(stream)) {
+        keywordSpotter.decode(stream)
+        if (keywordSpotter.getResult(stream).keyword) {
+          keywordSpotter.reset(stream)
+          detected = true
+        }
+      }
+      return detected
     },
     reset() {
       keywordSpotter.reset(stream)

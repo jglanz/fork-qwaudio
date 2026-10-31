@@ -22,11 +22,24 @@ QWEN_AUDIO_AGENT_ASSISTANT_PROFILE_PATH=/absolute/path/to/ASSISTANT.md
 
 The profile does not select the speaking voice; configure that under [voice frontend settings](../configuration/frontend.md). It cannot override tool permissions, task routing, or core runtime rules.
 
+## Spoken Response Style
+
+Backend results, progress updates, permission requests, and reminders are spoken with their own built-in instructions. Some voice frontends, such as speech-to-speech, replace the session prompt with those instructions, so the assistant profile and preferences do not reach them. To apply one style to all of them, create `<config-dir>/RESPONSE_STYLE.md`. Its text (up to 2000 characters) is appended to every such instruction, and edits apply to the next response.
+
+To use another file:
+
+```dotenv
+QWEN_AUDIO_AGENT_RESPONSE_STYLE_PATH=/absolute/path/to/RESPONSE_STYLE.md
+```
+
+The file is optional; without it the built-in instructions are used unchanged.
+
 ## Where Settings Live
 
 | Content | Default file | Example |
 | --- | --- | --- |
 | Default assistant profile | `<config-dir>/ASSISTANT.md` | Default name and style |
+| Spoken response style (optional) | `<config-dir>/RESPONSE_STYLE.md` | “Fewest possible words” |
 | Explicit long-term preferences | `<data-dir>/USER.md` | “Call me Captain” |
 | Long-term facts and decisions | `<data-dir>/MEMORY.md` | “I live in Hangzhou” |
 

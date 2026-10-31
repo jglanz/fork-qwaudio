@@ -201,6 +201,7 @@ export default function App() {
     orbSkinId,
     autoHideSeconds,
     wakeWordEnabled,
+    audioInput,
   } = desktopClientSettings
   // `t()` reads the module-level runtime language. Keeping a revision in
   // React state makes a language-only settings update repaint this surface
@@ -855,6 +856,7 @@ export default function App() {
     // microphone capture and never closes or interrupts the output stream.
     inputOnlyMute: true,
     wakeWordOnly: voiceEnabledForWakeWord,
+    audioInputLabel: audioInput,
     clientType: activeClientType,
     clientLabel: gatewayClientLabel(desktopOrbMode ? t('桌面端') : 'WebUI'),
     clientInstanceId: activeClientInstanceId,

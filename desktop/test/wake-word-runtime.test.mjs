@@ -53,3 +53,43 @@ test('desktop owns wake-word detection and forwards only hidden audio to its wor
   assert.equal(worker.terminated, true)
   assert.equal(runtime.accept('after-stop'), false)
 })
+
+test('worker data carries the selected wake word and defaults unknown ids', () => {
+  const runtime = new DesktopWakeWordRuntime({
+    modelRoot: '/tmp/wake-word',
+    wakeWord: 'jarvis',
+    WorkerClass: FakeWorker,
+  })
+  runtime.setEnabled(true)
+  assert.equal(FakeWorker.instances.at(-1).options.workerData.wakeWord, 'jarvis')
+  const fallback = new DesktopWakeWordRuntime({
+    modelRoot: '/tmp/wake-word',
+    wakeWord: 'unknown',
+    WorkerClass: FakeWorker,
+  })
+  fallback.setEnabled(true)
+  assert.equal(FakeWorker.instances.at(-1).options.workerData.wakeWord, 'qwen')
+})
+
+test('setWakeWord restarts the worker only on change and only when enabled', () => {
+  const runtime = new DesktopWakeWordRuntime({
+    modelRoot: '/tmp/wake-word',
+    WorkerClass: FakeWorker,
+  })
+  const before = FakeWorker.instances.length
+  runtime.setWakeWord('jarvis')
+  assert.equal(FakeWorker.instances.length, before)
+
+  runtime.setEnabled(true)
+  const first = FakeWorker.instances.at(-1)
+  assert.equal(first.options.workerData.wakeWord, 'jarvis')
+  runtime.setWakeWord('JARVIS')
+  assert.equal(first.terminated, false)
+  assert.equal(FakeWorker.instances.length, before + 1)
+
+  runtime.setWakeWord('qwen')
+  const second = FakeWorker.instances.at(-1)
+  assert.equal(first.terminated, true)
+  assert.notEqual(second, first)
+  assert.equal(second.options.workerData.wakeWord, 'qwen')
+})

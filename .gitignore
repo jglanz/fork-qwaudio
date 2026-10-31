@@ -1,3 +1,5 @@
+.idea
+.omc
 node_modules/
 output/playwright/browser-webui-smoke/
 web/dist/

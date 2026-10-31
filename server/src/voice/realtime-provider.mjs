@@ -14,6 +14,7 @@ import {
 import { frontendInputProjection } from '../../../shared/input-parts.mjs'
 import { RealtimeConfigurationError } from './realtime-errors.mjs'
 import { RealtimeResponseSlot } from './realtime-response-slot.mjs'
+import { withResponseStyle } from './response-style.mjs'
 import { sendBoundedWebSocket } from '../core/websocket-send.mjs'
 
 // Re-export provider-agnostic tools and instructions so existing callers
@@ -703,6 +704,9 @@ export class RealtimeFrontend {
   async sendResponse(response) {
     const pending = this.pendingResponses.at(-1)
     if (!pending || pending.settled) return false
+    // Transient instructions replace the session prompt on some providers, so
+    // the user's response style is appended to every one of them.
+    response = withResponseStyle(response)
     // A dialect may need a conversation item instead of transient response
     // instructions. Wait for its acknowledgement before triggering inference.
     const item = this.protocol.responseInstructionsItem?.(response)

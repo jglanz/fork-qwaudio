@@ -18,6 +18,7 @@ import {
   realtimeRuntimeEnvironment, realtimeSettingsValues, realtimeSettingsFromEnvironment, mergeRealtimeEnvironment,
 } from '../../shared/realtime-provider-definitions.mjs'
 import { normalizeDesktopLanguage } from './i18n.mjs'
+import { DEFAULT_WAKE_WORD, normalizeWakeWord } from './wake-word/wake-words.mjs'
 import { BUILTIN_REALTIME_MODEL_CATALOGS } from '../../shared/realtime-model-catalog.mjs'
 
 const DEFAULTS = {
@@ -27,6 +28,8 @@ const DEFAULTS = {
   autoHideSeconds: 60,
   wakeShortcut: 'CommandOrControl+Shift+Space',
   wakeWordEnabled: false,
+  wakeWord: DEFAULT_WAKE_WORD,
+  audioInput: '',
   ...realtimeSettingsValues(),
   agentProtocol: 'none',
   backendModel: '',
@@ -44,6 +47,8 @@ const CLIENT_SETTING_KEYS = {
   autoHideSeconds: 'QWEN_AUDIO_DESKTOP_AUTO_HIDE_SECONDS',
   wakeShortcut: 'QWEN_AUDIO_DESKTOP_WAKE_SHORTCUT',
   wakeWordEnabled: 'QWEN_AUDIO_WAKE_WORD_ENABLED',
+  wakeWord: 'QWEN_AUDIO_WAKE_WORD',
+  audioInput: 'QWEN_AUDIO_DESKTOP_AUDIO_INPUT',
   language: 'QWEN_AUDIO_DESKTOP_LANGUAGE',
 }
 
@@ -113,6 +118,11 @@ function cleanAutoHideSeconds(value) {
     return DEFAULTS.autoHideSeconds
   }
   return seconds
+}
+
+// 设备标签是跨页面稳定的标识（deviceId 按页面来源哈希，不可复用）。
+function cleanAudioInput(value) {
+  return String(value ?? '').trim().slice(0, 200).trim()
 }
 
 function cleanWakeShortcut(value) {
@@ -276,6 +286,16 @@ export function parseSettings(content = '', fallback = {}) {
         fallback.QWEN_AUDIO_WAKE_WORD_ENABLED || '',
       ),
     ).toLowerCase() === 'true',
+    wakeWord: normalizeWakeWord(configured(
+      values,
+      'QWEN_AUDIO_WAKE_WORD',
+      fallback.QWEN_AUDIO_WAKE_WORD ?? DEFAULTS.wakeWord,
+    )),
+    audioInput: cleanAudioInput(configured(
+      values,
+      'QWEN_AUDIO_DESKTOP_AUDIO_INPUT',
+      fallback.QWEN_AUDIO_DESKTOP_AUDIO_INPUT ?? DEFAULTS.audioInput,
+    )),
     ...parseRealtimeSettings(values, fallback, realtimeProvider),
     agentProtocol,
     backendModel: String(configured(
@@ -339,6 +359,8 @@ export function normalizeSettings(settings = {}) {
       settings.wakeShortcut ?? DEFAULTS.wakeShortcut,
     ),
     wakeWordEnabled: Boolean(settings.wakeWordEnabled),
+    wakeWord: normalizeWakeWord(settings.wakeWord ?? DEFAULTS.wakeWord),
+    audioInput: cleanAudioInput(settings.audioInput ?? DEFAULTS.audioInput),
     ...normalizeRealtimeSettings(settings, realtimeProvider),
     agentProtocol,
     backendModel: String(

@@ -1,5 +1,6 @@
 import { resolveOrbSkinId } from '../../../shared/orb-skin-catalog.mjs'
 import {
+  desktopAudioInput,
   desktopAutoHideSeconds,
   desktopWakeWordEnabled,
 } from './desktop-hide.js'
@@ -14,6 +15,7 @@ export function initialDesktopClientSettings(search = '') {
     autoHideSeconds: desktopAutoHideSeconds(search),
     wakeWordEnabled: desktopWakeWordEnabled(search),
     language: params.get('lang') || '',
+    audioInput: desktopAudioInput(search),
   }
 }
 
@@ -29,5 +31,8 @@ export function applyDesktopClientSettings(current, update = {}) {
       ? update.wakeWordEnabled
       : current.wakeWordEnabled,
     language: update.language || current.language,
+    audioInput: typeof update.audioInput === 'string'
+      ? update.audioInput
+      : current.audioInput,
   }
 }

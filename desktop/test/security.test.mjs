@@ -53,6 +53,17 @@ test('builds a dedicated desktop orb URL without losing existing parameters', ()
   )
 })
 
+test('adds the audio input label only when one is configured', () => {
+  assert.equal(
+    desktopOrbUrl('http://127.0.0.1:3101/', { audioInput: 'USB Mic' }),
+    'http://127.0.0.1:3101/?desktop=orb&audioInput=USB+Mic',
+  )
+  assert.equal(
+    desktopOrbUrl('http://127.0.0.1:3101/', { audioInput: '' }),
+    'http://127.0.0.1:3101/?desktop=orb',
+  )
+})
+
 test('passes sprite skins through and drops invalid skin ids', () => {
   // 导入皮肤只写 orbSkin，不带内置兼容参数 orbStyle。
   assert.equal(

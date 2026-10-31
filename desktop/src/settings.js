@@ -15,6 +15,7 @@ import { realtimeSettingsValues } from '../../shared/realtime-provider-definitio
 import { createRealtimeSettingsForm } from './realtime-settings-form.mjs'
 import { updaterButtonState, updaterStatusText } from './update-status.mjs'
 import { isLoopbackUrl } from './security.mjs'
+import { WAKE_WORDS, wakeWordLabel, normalizeWakeWord } from './wake-word/wake-words.mjs'
 import {
   desktopTranslator,
   effectiveDesktopLanguage,
@@ -32,6 +33,8 @@ const wakeShortcut = document.querySelector('#wake-shortcut')
 const recordWakeShortcut = document.querySelector('#record-wake-shortcut')
 const resetWakeShortcut = document.querySelector('#reset-wake-shortcut')
 const wakeWordEnabled = document.querySelector('#wake-word-enabled')
+const wakeWordSelect = document.querySelector('#wake-word')
+const audioInputSelect = document.querySelector('#audio-input')
 const desktopLanguage = document.querySelector('#desktop-language')
 const backendList = document.querySelector('#backend-list')
 const backendPicker = document.querySelector('.backend-picker')
@@ -700,6 +703,70 @@ function backendLabel(value) {
   return value
 }
 
+function renderWakeWordOptions(selected) {
+  const language = effectiveDesktopLanguage(desktopLanguage?.value, navigator.language)
+  wakeWordSelect.replaceChildren(...WAKE_WORDS.map(word => {
+    const option = document.createElement('option')
+    option.value = word.id
+    option.textContent = wakeWordLabel(word, language)
+    return option
+  }))
+  wakeWordSelect.value = normalizeWakeWord(selected)
+}
+
+// deviceId 按页面来源哈希，设置页与悬浮球页不一致，所以只保存并比较设备标签。
+let audioInputRefresh = 0
+
+async function listAudioInputLabels() {
+  const mediaDevices = navigator.mediaDevices
+  if (!mediaDevices?.enumerateDevices) return []
+  const labels = async () => (await mediaDevices.enumerateDevices())
+    .filter(device => (
+      device.kind === 'audioinput'
+      && device.label
+      && device.deviceId !== 'default'
+      && device.deviceId !== 'communications'
+    ))
+    .map(device => device.label)
+  let found = await labels()
+  if (!found.length && mediaDevices.getUserMedia) {
+    // 未授权时标签为空；申请一次权限后即可读到设备名称。
+    try {
+      const stream = await mediaDevices.getUserMedia({ audio: true })
+      stream.getTracks().forEach(track => track.stop())
+      found = await labels()
+    } catch {
+      found = []
+    }
+  }
+  return [...new Set(found)]
+}
+
+async function renderAudioInputOptions(selected = audioInputSelect.value) {
+  const refresh = ++audioInputRefresh
+  let labels = []
+  try {
+    labels = await listAudioInputLabels()
+  } catch {
+    labels = []
+  }
+  if (refresh !== audioInputRefresh) return
+  const saved = String(selected || '')
+  const entries = [{ value: '', text: t('跟随系统') }]
+  for (const label of labels) entries.push({ value: label, text: label })
+  if (saved && !labels.includes(saved)) {
+    entries.push({ value: saved, text: `${saved} ${t('(未连接)')}` })
+  }
+  audioInputSelect.replaceChildren(...entries.map(entry => {
+    const option = document.createElement('option')
+    option.value = entry.value
+    option.textContent = entry.text
+    return option
+  }))
+  audioInputSelect.value = saved
+  updateApplyState()
+}
+
 function formSettings() {
   return {
     gatewayUrl: gatewayUrl.value,
@@ -707,6 +774,8 @@ function formSettings() {
     autoHideSeconds: Number(autoHideSeconds.value),
     wakeShortcut: wakeShortcut.value,
     wakeWordEnabled: wakeWordEnabled.checked,
+    wakeWord: wakeWordSelect.value,
+    audioInput: audioInputSelect.value,
     ...realtimeForm.values(),
     agentProtocol: selectedBackend(),
     backendModel: backendModel.value,
@@ -725,6 +794,8 @@ function fingerprint(value) {
     autoHideSeconds: value.autoHideSeconds,
     wakeShortcut: value.wakeShortcut,
     wakeWordEnabled: value.wakeWordEnabled,
+    wakeWord: value.wakeWord,
+    audioInput: value.audioInput,
     ...realtimeSettingsValues(value),
     agentProtocol: value.agentProtocol,
     backendModel: value.backendModel,
@@ -985,6 +1056,11 @@ function render() {
   wakeWordEnabled.checked = settings.wakeWordEnabled || false
   desktopLanguage.value = settings.language || 'auto'
   applyLanguage(desktopLanguage.value)
+  renderWakeWordOptions(settings.wakeWord)
+  // 先同步放入已保存的标签，设备枚举完成后再刷新为实际列表。
+  audioInputSelect.replaceChildren(new Option(settings.audioInput || t('跟随系统'), settings.audioInput || ''))
+  audioInputSelect.value = settings.audioInput || ''
+  void renderAudioInputOptions(settings.audioInput || '')
   recordingWakeShortcut = false
   renderWakeShortcut()
   realtimeForm.load(settings, realtimeModelCatalogs, realtimeModelCatalogError)
@@ -1010,6 +1086,8 @@ for (const control of [
   backendCredential,
   nodePathInput,
   wakeWordEnabled,
+  wakeWordSelect,
+  audioInputSelect,
   desktopLanguage,
 ]) {
   control.addEventListener('input', () => {
@@ -1024,6 +1102,8 @@ for (const control of [
       renderUpdater(updaterState)
       renderBackendOptions(selectedBackend())
       renderSkinOptions(orbSkinSelect.value)
+      renderWakeWordOptions(wakeWordSelect.value)
+      void renderAudioInputOptions(audioInputSelect.value)
       realtimeForm.render()
       renderRealtimeModelCatalogError()
       renderRuntime()
@@ -1033,6 +1113,10 @@ for (const control of [
 }
 
 orbSkinSelect.addEventListener('change', updateRemoveSkinState)
+
+navigator.mediaDevices?.addEventListener?.('devicechange', () => {
+  void renderAudioInputOptions(audioInputSelect.value)
+})
 
 importSkinButton.addEventListener('click', async () => {
   importSkinButton.disabled = true

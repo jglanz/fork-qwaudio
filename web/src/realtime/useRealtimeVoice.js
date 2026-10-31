@@ -26,6 +26,7 @@ import {
   pcmBase64,
 } from './audio.js'
 import { createMicrophoneAudioWorkletNode } from './microphone-audio-worklet.js'
+import { microphoneAudioConstraints, resolveAudioInputDeviceId } from './microphone-device.js'
 import {
   createMicrophoneCaptureLifecycle,
   microphoneErrorKind,
@@ -203,6 +204,27 @@ export function releasesManualInputGuard(event, turnId = '') {
   return Boolean(turnId) && event.turnId === turnId
 }
 
+// Opens the configured input by label and falls back to the system default
+// when the device is gone or cannot satisfy the exact constraint.
+async function acquireMicrophoneStream(label) {
+  const mediaDevices = navigator.mediaDevices
+  if (label) {
+    try {
+      const devices = await mediaDevices.enumerateDevices()
+      const deviceId = resolveAudioInputDeviceId(devices, label)
+      if (deviceId) {
+        return await mediaDevices.getUserMedia({
+          audio: microphoneAudioConstraints(deviceId),
+        })
+      }
+    } catch {
+      // Overconstrained, missing, or unenumerable: use the system default.
+      // A genuine permission error resurfaces from the default request.
+    }
+  }
+  return mediaDevices.getUserMedia({ audio: microphoneAudioConstraints() })
+}
+
 export default function useRealtimeVoice({
   sessionId,
   enabled,
@@ -210,6 +232,7 @@ export default function useRealtimeVoice({
   outputMuted = false,
   inputOnlyMute = false,
   wakeWordOnly = false,
+  audioInputLabel = '',
   clientType = 'web',
   clientLabel = 'WebUI',
   clientInstanceId: configuredClientInstanceId = '',
@@ -247,6 +270,9 @@ export default function useRealtimeVoice({
   const clientActionRef = useRef(onClientAction)
   const wakeWordAudioRef = useRef(onWakeWordAudio)
   const wakeWordOnlyRef = useRef(wakeWordOnly)
+  const audioInputLabelRef = useRef(audioInputLabel)
+  const appliedAudioInputLabelRef = useRef(audioInputLabel)
+  const captureRef = useRef(null)
   const socketRef = useRef(null)
   const takeoverRef = useRef(false)
   const hasConnectedRef = useRef(false)
@@ -285,6 +311,7 @@ export default function useRealtimeVoice({
   clientActionRef.current = onClientAction
   wakeWordAudioRef.current = onWakeWordAudio
   wakeWordOnlyRef.current = wakeWordOnly
+  audioInputLabelRef.current = audioInputLabel
   enabledRef.current = enabled
   outputMutedRef.current = outputMuted
 
@@ -930,9 +957,7 @@ export default function useRealtimeVoice({
         const context = audioRef.current
         if (!context) throw unsupportedInput(t('无法初始化实时语音播放'))
         if (context.state === 'suspended') await context.resume()
-        const media = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        })
+        const media = await acquireMicrophoneStream(audioInputLabelRef.current)
         const wakeWordResampler = createStreamingResampler()
         const inputResampler = createStreamingResampler()
         let inputResamplerSocket = null
@@ -1042,9 +1067,11 @@ export default function useRealtimeVoice({
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
+    captureRef.current = capture
 
     return () => {
       disposed = true
+      if (captureRef.current === capture) captureRef.current = null
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       inputReadyRef.current = false
       setInputReady(false)
@@ -1058,6 +1085,14 @@ export default function useRealtimeVoice({
     sessionId,
     suspended,
   ])
+
+  // Switching the input device only restarts capture; it is deliberately not
+  // a dependency of the capture effect so the session never reconnects.
+  useEffect(() => {
+    if (appliedAudioInputLabelRef.current === audioInputLabel) return
+    appliedAudioInputLabelRef.current = audioInputLabel
+    captureRef.current?.restart('input-device')
+  }, [audioInputLabel])
 
   useEffect(() => {
     if (!enabled || suspended || !inputReadyRef.current) return

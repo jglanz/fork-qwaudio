@@ -13,6 +13,8 @@ import {
 const REALTIME_DEFAULTS = {
   wakeShortcut: 'CommandOrControl+Shift+Space',
   wakeWordEnabled: false,
+  wakeWord: 'qwen',
+  audioInput: '',
   realtimeProvider: 'dashscope',
   realtimeUrl: 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime',
   realtimeModel: 'qwen-audio-3.1-realtime-plus',
@@ -323,6 +325,33 @@ test('reads and updates a supported desktop wake shortcut', () => {
     ).wakeShortcut,
     'CommandOrControl+Shift+Space',
   )
+})
+
+test('reads, updates, trims and caps the selected audio input label', () => {
+  assert.equal(parseSettings('').audioInput, '')
+  assert.equal(
+    parseSettings('QWEN_AUDIO_DESKTOP_AUDIO_INPUT="USB Mic (Rev 2)"\n').audioInput,
+    'USB Mic (Rev 2)',
+  )
+  const content = updateSettingsContent('', { audioInput: '  Built-in Microphone  ' })
+  assert.match(content, /QWEN_AUDIO_DESKTOP_AUDIO_INPUT=/)
+  assert.equal(parseSettings(content).audioInput, 'Built-in Microphone')
+  assert.equal(normalizeSettings({}).audioInput, '')
+  assert.equal(normalizeSettings({ audioInput: 'x'.repeat(300) }).audioInput.length, 200)
+  const cleared = updateSettingsContent(content, { audioInput: '' })
+  assert.equal(parseSettings(cleared).audioInput, '')
+})
+
+test('reads, updates, and normalizes the selected wake word', () => {
+  assert.equal(parseSettings('').wakeWord, 'qwen')
+  assert.equal(parseSettings('QWEN_AUDIO_WAKE_WORD=jarvis\n').wakeWord, 'jarvis')
+  assert.equal(parseSettings('QWEN_AUDIO_WAKE_WORD=nope\n').wakeWord, 'qwen')
+  const content = updateSettingsContent('', { wakeWord: 'jarvis' })
+  assert.match(content, /QWEN_AUDIO_WAKE_WORD=jarvis/)
+  assert.equal(parseSettings(content).wakeWord, 'jarvis')
+  assert.equal(normalizeSettings({ wakeWord: 'jarvis' }).wakeWord, 'jarvis')
+  assert.equal(normalizeSettings({ wakeWord: 'bogus' }).wakeWord, 'qwen')
+  assert.equal(normalizeSettings({}).wakeWord, 'qwen')
 })
 
 test('writes uniform endpoint, model and voice and clears a backend model', () => {
